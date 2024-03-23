@@ -1,7 +1,55 @@
 #include "common.h"
+#include <dirent.h>
+#include <stdbool.h>
 
+
+typedef struct{
+  char* route;
+  struct Node* next;
+} Node;
+
+Node *head = NULL;
+
+Node *add_node(char* route){
+  Node *new = NULL;
+
+  if(head == NULL){
+    new = malloc(sizeof(Node));
+    if (new == NULL)
+      return NULL;
+
+    new->route = route;
+    head = new;
+    new->next = NULL;
+  }else { 
+    new = malloc(sizeof(Node));
+    if (new == NULL)
+      return NULL;
+
+    new->route = route;
+    new->next = head;
+    head = new;
+  }
+  return new;
+}
 
 void read_file(const char* file_path){};
+
+int read_file_struct(){
+  // Get all the files in routes.
+  DIR *d;
+  struct dirent *dir;
+  d = opendir("routes");
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      if (strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0 && dir->d_type == DT_DIR){
+         add_node(dir->d_name);
+      }
+    }
+    closedir(d);
+  }
+  return(0);
+}
 
 void send_res_headers(const int connfd, const int status, const char* content_type, long content_length){
   char headers[1024];
@@ -70,7 +118,7 @@ void send_image(const int connfd, const char* file_path){
 }
 
 void send_404(const int connfd){
-  FILE *file = fopen("404.html", "rb");
+  FILE *file = fopen("routes/404.html", "rb");
 
   if(file == NULL){
     send_res_headers(connfd, 404, "text/html", 0);
@@ -115,9 +163,32 @@ void handle_request(const int connfd, const char* method, const char* path){
   if(type == 0){
     if(strcmp(path, "/") == 0)
       send_file(connfd, "routes/index.html");
-    else if(strcmp(path, "/page2") == 0)
-      send_file(connfd, "routes/page2/page2.html");
-    else send_404(connfd);
+    else {
+      if (path[0] == '/') {
+        memmove((void*)path, path + 1, strlen(path));
+      }
+      Node *current = head;
+      char* file_con = NULL;
+      bool FOUND = false;
+      while(current != NULL){
+        char* route = current->route;
+        printf("\nroute: %s\n", route);
+        if(strcmp(path, route) == 0){
+          file_con = concat("routes/", route);
+          file_con = concat(file_con, "/index.html");
+          FOUND = true;
+          break;
+        }
+        current = current->next;
+      }
+      if (FOUND){
+        printf("\nFOUND: %s\n", file_con);
+        send_file(connfd, file_con);
+      } else {
+        printf("\nPage not found");
+        send_404(connfd);
+      }
+    }
   }
   else {
     if (path[0] == '/') {
@@ -128,6 +199,9 @@ void handle_request(const int connfd, const char* method, const char* path){
 }
 
 int main(){
+  
+  read_file_struct();
+
   int connfd, n, yes = 1;
   uint8_t recvline[MAXLINE + 1];
   uint8_t buff[MAXLINE + 1];
@@ -163,7 +237,7 @@ int main(){
     char path[255];
     char version[10];
 
-    printf("\n\n\nWaiting for a connection\n\n");
+    printf("Waiting for a connection\n\n");
     fflush(stdout);
     connfd = accept(s, (SA *)NULL, NULL);
     memset(recvline, 0, MAXLINE);
