@@ -8,6 +8,8 @@
 #include <sys/sendfile.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dirent.h>
+#include <stdbool.h>
 
 #ifndef common_vars
 #define PORT_NUMBER 8080 
